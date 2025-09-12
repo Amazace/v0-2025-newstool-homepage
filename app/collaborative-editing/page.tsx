@@ -58,6 +58,18 @@ export default function CollaborativeEditingPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<NewsItem | null>(null)
 
+  const getStatusDisplayName = (status: NewsItem["status"]): string => {
+    const statusMap = {
+      not_pre_collected: "未預採",
+      accepted: "接受",
+      rejected: "拒訪",
+      waiting_reply: "等待回覆",
+      welfare_lead: "福利線",
+      special_situation: "特殊狀況",
+    }
+    return statusMap[status] || status
+  }
+
   useEffect(() => {
     if (user) {
       loadLeads()
@@ -122,18 +134,6 @@ export default function CollaborativeEditingPage() {
       item.reporter.includes(searchTerm) ||
       getStatusDisplayName(item.status).includes(searchTerm),
   )
-
-  const getStatusDisplayName = (status: NewsItem["status"]): string => {
-    const statusMap = {
-      not_pre_collected: "未預採",
-      accepted: "接受",
-      rejected: "拒訪",
-      waiting_reply: "等待回覆",
-      welfare_lead: "福利線",
-      special_situation: "特殊狀況",
-    }
-    return statusMap[status] || status
-  }
 
   const canEditOrDelete = (item: NewsItem): boolean => {
     if (!user) return false
