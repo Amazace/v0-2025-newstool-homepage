@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
 import type { UserProfile } from "@/lib/types/auth"
@@ -30,8 +30,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const supabase = createClient()
 
+  const fetchingProfile = useRef(false)
+  const currentUserId = useRef<string | null>(null)
+
   const fetchUserProfile = async (supabaseUser: SupabaseUser): Promise<User | null> => {
+    if (fetchingProfile.current && currentUserId.current === supabaseUser.id) {
+      return null
+    }
+
     try {
+      fetchingProfile.current = true
+      currentUserId.current = supabaseUser.id
+
       const { data: profile, error } = await supabase.from("profiles").select("*").eq("id", supabaseUser.id).single()
 
       if (error) {
@@ -49,55 +59,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Error in fetchUserProfile:", error)
       return null
+    } finally {
+      fetchingProfile.current = false
     }
   }
 
   const login = async (displayName: string, password: string): Promise<{ error?: string }> => {
     try {
       setIsLoading(true)
-      console.log("[v0] Login attempt with displayName:", displayName)
 
-      // 先通過 full_name 查找對應的 email
-      console.log("[v0] Searching for user profile with full_name:", displayName)
       const { data: profiles, error: profileError } = await supabase
         .from("profiles")
-        .select("email, full_name, role")
+        .select("email")
         .eq("full_name", displayName)
         .single()
 
-      console.log("[v0] Profile search result:", { profiles, profileError })
-
       if (profileError || !profiles) {
-        console.log("[v0] Profile not found, error:", profileError)
         return { error: "找不到該使用者名稱" }
       }
 
-      const email = profiles.email
-      console.log("[v0] Found email for user:", email)
-
-      console.log("[v0] Attempting Supabase auth with email:", email)
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: profiles.email,
         password,
       })
 
-      console.log("[v0] Supabase auth result:", { data: !!data.user, error })
-
       if (error) {
-        console.log("[v0] Auth error:", error.message)
         return { error: "使用者名稱或密碼錯誤" }
-      }
-
-      if (data.user) {
-        console.log("[v0] Auth successful, fetching user profile")
-        const userProfile = await fetchUserProfile(data.user)
-        console.log("[v0] User profile fetched:", userProfile)
-        setUser(userProfile)
       }
 
       return {}
     } catch (error) {
-      console.log("[v0] Login catch error:", error)
       return { error: error instanceof Error ? error.message : "登入時發生錯誤" }
     } finally {
       setIsLoading(false)
@@ -109,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true)
       await supabase.auth.signOut()
       setUser(null)
+      currentUserId.current = null
     } catch (error) {
       console.error("Error during logout:", error)
     } finally {
@@ -117,20 +109,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    let mounted = true
+
     const getInitialSession = async () => {
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession()
 
-        if (session?.user) {
+        if (session?.user && mounted) {
           const userProfile = await fetchUserProfile(session.user)
-          setUser(userProfile)
+          if (userProfile && mounted) {
+            setUser(userProfile)
+          }
         }
       } catch (error) {
         console.error("Error getting initial session:", error)
       } finally {
-        setIsLoading(false)
+        if (mounted) {
+          setIsLoading(false)
+        }
       }
     }
 
@@ -139,23 +137,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("[v0] Auth state changed:", event)
+      if (!mounted) return
 
       if (event === "SIGNED_IN" && session?.user) {
         const userProfile = await fetchUserProfile(session.user)
-        setUser(userProfile)
+        if (userProfile && mounted) {
+          setUser(userProfile)
+        }
       } else if (event === "SIGNED_OUT") {
         setUser(null)
-      } else if (event === "TOKEN_REFRESHED" && session?.user) {
-        // Token 自動刷新時更新使用者資料
-        const userProfile = await fetchUserProfile(session.user)
-        setUser(userProfile)
+        currentUserId.current = null
       }
 
-      setIsLoading(false)
+      if (mounted) {
+        setIsLoading(false)
+      }
     })
 
     return () => {
+      mounted = false
       subscription.unsubscribe()
     }
   }, [])
