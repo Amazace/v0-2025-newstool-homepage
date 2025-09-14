@@ -14,19 +14,17 @@ export async function getLeads(): Promise<Lead[]> {
   return data || []
 }
 
-export async function createLead(lead: Omit<Lead, "id" | "created_at" | "updated_at" | "created_by">): Promise<Lead> {
+export async function createLead(
+  lead: Omit<Lead, "id" | "created_at" | "updated_at" | "created_by">,
+  userId: string,
+): Promise<Lead> {
   const supabase = createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error("User not authenticated")
 
   const { data, error } = await supabase
     .from("leads")
     .insert({
       ...lead,
-      created_by: user.id,
+      created_by: userId,
     })
     .select()
     .single()

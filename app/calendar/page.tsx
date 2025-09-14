@@ -168,7 +168,11 @@ export default function CalendarPage() {
           prevEvents.map((event) => (event.id === editingEvent.id ? mapEventToCalendarEvent(updatedEvent) : event)),
         )
       } else {
-        const newEvent = await createEvent(mapCalendarEventToEvent(eventData))
+        if (!user?.id) {
+          setError("使用者資訊不完整")
+          return
+        }
+        const newEvent = await createEvent(mapCalendarEventToEvent(eventData), user.id)
         // Realtime 會自動更新 UI，但為了即時反饋也手動更新
         setEvents((prevEvents) => [...prevEvents, mapEventToCalendarEvent(newEvent)])
       }

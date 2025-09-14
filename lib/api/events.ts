@@ -16,19 +16,15 @@ export async function getEvents(): Promise<Event[]> {
 
 export async function createEvent(
   event: Omit<Event, "id" | "created_at" | "updated_at" | "created_by">,
+  userId: string,
 ): Promise<Event> {
   const supabase = createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error("User not authenticated")
 
   const { data, error } = await supabase
     .from("events")
     .insert({
       ...event,
-      created_by: user.id,
+      created_by: userId,
     })
     .select()
     .single()

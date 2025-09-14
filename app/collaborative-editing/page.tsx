@@ -179,7 +179,11 @@ export default function CollaborativeEditingPage() {
           prev.map((existing) => (existing.id === editingItem.id ? mapLeadToNewsItem(updatedLead) : existing)),
         )
       } else {
-        const newLead = await createLead(mapNewsItemToLead(item))
+        if (!user?.id) {
+          setError("使用者資訊不完整")
+          return
+        }
+        const newLead = await createLead(mapNewsItemToLead(item), user.id)
         // Realtime 會自動更新 UI，但為了即時反饋也手動更新
         setNewsItems((prev) => [mapLeadToNewsItem(newLead), ...prev])
       }
